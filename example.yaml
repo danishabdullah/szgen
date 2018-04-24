@@ -1,0 +1,74 @@
+User:
+  enums:
+    - name: user_role
+      options: webuser,admin,shadow-banned
+  columns:
+    - name: id
+      type: bigserial
+      primary_key: true
+    - name: email
+      type: varchar(256)
+      nullable: false
+      modifiers: unique
+      check: (length(email) > 7)
+    - name: password
+      type: varchar(72)
+      nullable: false
+      check: (length("password") > 12)
+    - name: has_verified_email
+      type: boolean
+      nullable: false
+      default: false
+    - name: role
+      type: user_role
+      nullable: false
+      default: settings.get('auth.default-role')::user_role
+  rls:
+    read: self
+    alter: self
+  rabbitmq:
+    include: id,email
+  include:
+    created_at: true
+    updated_at: true
+  api:
+    exclude: password
+
+
+
+Profile:
+  enums:
+    - name: gender
+      options: man,woman,cis man,cis woman,agender,androgynous,bigender,genderfluid,genderqueer,gender nonconforming,hijra,intersex,non binary,pangender,transfeminine,transgender,transmasculine,transsexual,trans man,trans woman,two spirits,other"
+    - name: diet
+      options: omnivore,vegetarian,pescatarian,vegan,carnivore,halal,kosher,paleo,keto,gluten free,pizza
+  columns:
+    - name: id
+      type: bigserial
+      primary_key: true
+    - name: name
+      type: varchar(128)
+      nullable: false
+      check: check (length(name)>2)
+    - name: dob
+      type: date
+      nullable: false
+      check: (dob BETWEEN '1905-01-01'::date  AND CURRENT_DATE - interval '18 year')
+    - name: gender
+      type: gender
+      nullable: false
+  foreign_keys:
+    - name: owner_id # this is important for rlse
+      type: bigint
+      nullable: false
+      references:
+        table: user
+        column: id
+  rls:
+    read: all
+    alter: self
+  rabbitmq:
+    include: id,name
+  api:
+    exclude: owner_id # don't expose the owner_id in the api calls
+
