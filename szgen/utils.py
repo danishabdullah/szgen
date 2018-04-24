@@ -7,13 +7,13 @@ from collections import namedtuple
 from szgen.errors import InvalidModelDefinition
 
 __author__ = 'danishabdullah'
-TYPE_INFO_REGEX = re.compile('(^\\w+)(\\(.*\\))?(\\w+)?$')
+TYPE_INFO_REGEX = re.compile('(^\w+)((\(|\[).*(\]|\))|)?(\w+)?$')
 PartialsCollector = namedtuple('PartialsCollector', ['api_schema', 'data_schema', 'authorization_privileges'])
 
 
 def separate_type_info_and_params(string):
     for match in TYPE_INFO_REGEX.finditer(string):
-        name, params, last_bit = match.groups()
+        name, params, _, _, last_bit = match.groups()
         if last_bit:
             name = (' ').join([name, last_bit])
         return (name if name else '', params if params else '')
