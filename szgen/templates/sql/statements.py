@@ -2,7 +2,7 @@ from string import Template
 
 __author__ = "danishabdullah"
 
-__all__ = ('insert_into', 'column_definition', 'column_check', 'foreign_key', 'time_column', 'updated_at_trigger',
+__all__ = ('insert_into', 'column_definition', 'column_check', 'foreign_key', 'updated_at_trigger',
            'create_extension', 'index_definition', 'where_clause', 'grant_definition', 'table_import',
            'table_type_import', 'relay_import', 'view_import', 'data_table_import', 'data_table_import',
            'api_schema_import', 'api_rpc_import', 'sql_file_import', 'enum_option', 'column_modifiers', 'rls_self',
