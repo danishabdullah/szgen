@@ -8,6 +8,8 @@ from szgen.errors import InvalidModelDefinition
 
 __author__ = 'danishabdullah'
 TYPE_INFO_REGEX = re.compile('(^\w+)((\(|\[).*(\]|\))|)?(\w+)?$')
+MULTI_SPACE_REGEX = re.compile(" {2,}")
+
 PartialsCollector = namedtuple('PartialsCollector', ['api_schema', 'data_schema', 'authorization_privileges'])
 
 
@@ -65,13 +67,17 @@ def check_nodes(model_name, model, path='column.name', value_list=None):
 
 
 def get_json_from_dict(dictionary, prettified=False, commented_out_sql=False):
-    dump_params = {'indent': 0, 'sort_keys': True}
-    if not prettified:
+    dump_params = {'sort_keys': True, 'separators': (',',':')}
+    if prettified:
         dump_params = {'indent': 4,
                        'sort_keys': True}
     res = json.dumps(dictionary, **dump_params)
     if commented_out_sql:
         res = res.split('\n')
-        res = ['--' + line for line in res]
+        res = ['--    ' + line for line in res]
         res = ('\n').join(res)
     return res
+
+
+def remove_extra_white_space(string):
+    return re.sub(MULTI_SPACE_REGEX, " ", string).strip()

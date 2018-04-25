@@ -10,7 +10,7 @@ from szgen.consts import POSTGRES_TYPES, DATA_PATH, API_PATH, API_RPC_PATH, PRIV
     AUTH_LIB_API_TYPES_PATH, AUTH_LIB_API_RPC_PATH, AUTH_LIB_DATA_PATH, AUTH_LIB_BASE, TAB
 from szgen.errors import InvalidModelDefinition
 from szgen.templates import sql
-from szgen.utils import separate_type_info_and_params, get_json_from_dict
+from szgen.utils import separate_type_info_and_params, get_json_from_dict, remove_extra_white_space
 
 __author__ = 'danishabdullah'
 __all__ = ('SQLCompiler',)
@@ -46,6 +46,20 @@ class SQLCompiler(object):
         self.enum_definitions = tb_spec.get('enums', [])
         self.include_created_at = tb_spec.get('include', {}).get('created_at', True)
         self.include_updated_at = tb_spec.get('include', {}).get('updated_at', True)
+        if self.include_updated_at:
+            self.column_definitions.append({
+                'name': 'updated_at',
+                'type': 'timestamp with time zone',
+                'default': 'current_timestamp',
+                'nullable': False
+            })
+        if self.include_created_at:
+            self.column_definitions.append({
+                'name': 'created_at',
+                'type': 'timestamp with time zone',
+                'default': 'current_timestamp',
+                'nullable': False
+            })
         self.foreign_key_definitions = tb_spec.get('foreign_keys', [])
         self.rls_read = tb_spec.get('rls', {}).get('read', 'all')
         self.rls_alter = tb_spec.get('rls', {}).get('alter', 'all')
@@ -55,12 +69,24 @@ class SQLCompiler(object):
         self.data_path = DATA_PATH / self.table_name if name != 'user' else AUTH_LIB_DATA_PATH
         self.api_path = API_PATH / self.table_name
         self.enforce_postgres_types()
+        print("Following columns will be created for table '{}':\n{}{}".format(self.table_name, TAB,
+                                                                               self.all_columns))
 
     @property
     def all_columns_defs(self):
         all_cols = self.column_definitions.copy()
         all_cols.extend(self.foreign_key_definitions)
         return all_cols
+
+    @property
+    def longest_column_name(self):
+        return max(self.all_columns, key=len)
+
+    def get_padding(self, name):
+        max_len = len(self.longest_column_name)
+        desired_len = max_len + 8 - len(name)
+        return ''.ljust(desired_len)
+
 
     @property
     def required_columns(self):
@@ -166,8 +192,12 @@ class SQLCompiler(object):
                 modifier = 'primary key'
             return modifier
 
-        res = ([], [], [])
+        res = ([], # columns
+               [], # references
+               []) # checks
+
         for column in self.all_columns_defs:
+            # figure out the modifiers
             null_modifier = get_null_modifier(column)
             default_modifier = get_default_modifier(column)
             given_modifiers = column.get('modifiers', '')
@@ -176,9 +206,17 @@ class SQLCompiler(object):
                                                                    null_modifier=null_modifier,
                                                                    default_modifier=default_modifier,
                                                                    primary_key_modifier=primary_key_modifier)
+            # cleanup lingering whitespace
+            modifiers = remove_extra_white_space(modifiers)
+
+            # prettify and make it easier on the eyes to read long tables
             column_name = column.get('name')
             column_type = column.get('type')
-            reference = column.get('reference', {})
+            padding = self.get_padding(column_name)
+            column_type = "{padding}{column_type}".format(padding=padding, column_type=column_type)
+
+            # make reference work
+            reference = column.get('references', {})
             if reference:
                 res[1].append(sql.statements.foreign_key.substitute(column_name=column_name, column_type=column_type,
                                                                     column_modifiers=modifiers,
@@ -192,15 +230,11 @@ class SQLCompiler(object):
             if check:
                 res[2].append(sql.statements.column_check.substitute(check_statement=check))
 
-        if self.include_created_at:
-            res[0].append(sql.statements.time_column.substitute(time_modifier='created'))
-        if self.include_updated_at:
-            res[0].append(sql.statements.time_column.substitute(time_modifier='updated'))
         join_string = (',\n{}').format(TAB)
         return (
-            join_string.join(res[0]),
-            join_string.join(res[1]),
-            join_string.join(res[2]))
+            join_string.join(res[0]), # columns
+            join_string.join(res[1]), # references
+            join_string.join(res[2])) # checks
 
     @property
     def all_columns(self):
@@ -216,6 +250,7 @@ class SQLCompiler(object):
             return (', ').join(res)
 
         column_defs, reference_column_defs, check_defs = self.all_compiled_columns
+        print(reference_column_defs)
         rabbitmq_columns = get_rabbitmq_columns(self.rabbitmq_definition.get('columns', ''))
         filename = self.data_path / ('{}.sql').format(self.table_name)
         updated_at_trigger = (
@@ -301,13 +336,13 @@ class SQLCompiler(object):
         imports = []
         res = {}
         for enum in self.enum_definitions:
+            filename = ('{}.sql').format(enum['name'])
             enum_name = enum['name']
             enum_options = [x.strip() for x in enum['options'].split(',') if x]
             compiled_enum_options = compiled_options(enum_options)
             enum_json_dict = {x.title(): x for x in enum_options}
             minified_json = get_json_from_dict(enum_json_dict)
             pretty_json_commented_out = get_json_from_dict(enum_json_dict, prettified=True, commented_out_sql=True)
-            filename = ('{}.sql').format(enum_name)
             enum_file_path = ('types/{}').format(filename)
             imports.append(sql.statements.sql_file_import.substitute(filename=filename))
             file_name = self.data_path / enum_file_path

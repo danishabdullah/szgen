@@ -11,16 +11,15 @@ __all__ = ('insert_into', 'column_definition', 'column_check', 'foreign_key', 't
 insert_into = Template("""insert into $table_name ($table_columns)
 values
     ($column_types);""")
-column_definition = Template("""$column_name $column_type $column_modifiers""")
-column_modifiers = Template("""$given_modifiers $primary_key_modifier $null_modifier $default_modifier""")
+column_definition = Template("""$column_name $column_type$column_modifiers""")
+column_modifiers = Template(""" $given_modifiers $primary_key_modifier $null_modifier $default_modifier""")
 column_check = Template("""check ($check_statement)""")
 foreign_key = Template(
     """$column_name $column_type references $reference_table.$reference_column $column_modifiers""")
-time_column = Template("""${time_modifier}_at timestamp with time zone default current_timestamp not null""")
-updated_at_trigger = Template("""CREATE TRIGGER updated_at_mdt
-    BEFORE UPDATE ON $table_name
-    FOR EACH ROW
-    EXECUTE PROCEDURE moddatetime (updated_at);
+updated_at_trigger = Template("""create trigger updated_at_mdt
+    before update on $table_name
+    for each row
+    execute procedure moddatetime (updated_at);
 """)
 create_extension = Template("CREATE EXTENSION IF NOT EXISTS $extention_name WITH SCHEMA $schema_name;")
 index_definition = Template(
@@ -52,7 +51,7 @@ api_rpc_import = Template("""\ir rpc/${view_name}.sql""")
 
 sql_file_import = Template("""\ir $filename.sql""")
 
-enum_option = Template('$enum_option')
+enum_option = Template("""'$enum_option'""")
 
 rls_self = "(request.user_role() = 'webuser' and request.user_id() = owner_id)"
 rls_all = "(request.user_role() = 'webuser')"
