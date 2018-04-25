@@ -61,7 +61,7 @@ table_name:
         column: name_of_column
   rls:
     # row level security is automatically turned off if both read and alter are set to 'all'
-    # row level security is automatically turned off if both read is 'all' and alter is 'none'
+    # row level security is automatically turned off if alter is 'none'
     # rls depends on owner_id column please change if you reference the user table differently
     read: "all" | "self" # assumed 'all' if absent
     alter: "all" | "self" | "none" # assumed 'all' if absent
