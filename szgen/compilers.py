@@ -212,6 +212,7 @@ class SQLCompiler(object):
                                                                    primary_key_modifier=primary_key_modifier)
             # cleanup lingering whitespace
             modifiers = remove_extra_white_space(modifiers)
+            modifiers = " " + modifiers if modifiers else ''
 
             # prettify and make it easier on the eyes to read long tables
             column_name = column.get('name')
@@ -270,9 +271,9 @@ class SQLCompiler(object):
         """Returns compiled view sql"""
         view_name = self.view_name
         table_name = self.table_name
-        excluded = self.api_definition.get('exclude', [])
+        excluded = self.api_definition.get('exclude', '').split(',')
         view_columns = [column for column in self.all_columns if
-                        column not in excluded or column not in self.primary_key_names]
+                        (column not in excluded and column not in self.primary_key_names)]
         primary_key = self.primary_key_names[0]
         filename = self.api_path / ('{}.sql').format(view_name)
         join_string = (',\n{}').format(TAB)
