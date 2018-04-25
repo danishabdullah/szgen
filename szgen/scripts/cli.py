@@ -7,7 +7,6 @@ import click
 import yaml
 
 from szgen.compilers import SQLCompiler, compile_collected_partials
-from szgen.consts import POSTGRES_TYPES
 from szgen.errors import DirectoryCreationException, FileNotFound
 from szgen.utils import check_nodes, PartialsCollector
 

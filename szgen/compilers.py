@@ -1,9 +1,3 @@
-# uncompyle6 version 3.1.3
-# Python bytecode 3.6 (3379)
-# Decompiled from: Python 3.6.5 |Anaconda, Inc.| (default, Mar 29 2018, 13:32:41) [MSC v.1900 64 bit (AMD64)]
-# Embedded file name: c:\users\danishabdullah\onedrive\code\explorations\szgen\szgen\compilers.py
-# Compiled at: 2018-04-24 01:52:18
-# Size of source mod 2**32: 19793 bytes
 from __future__ import print_function, unicode_literals
 
 from szgen.consts import POSTGRES_TYPES, DATA_PATH, API_PATH, API_RPC_PATH, PRIVILEGES_PATH, POSTGRES_SERIAL_TYPES, \
@@ -90,7 +84,6 @@ class SQLCompiler(object):
         max_len = len(self.longest_column_name)
         desired_len = max_len + 8 - len(name)
         return ''.ljust(desired_len)
-
 
     @property
     def required_columns(self):
@@ -196,9 +189,9 @@ class SQLCompiler(object):
                 modifier = 'primary key'
             return modifier
 
-        res = ([], # columns
-               [], # references
-               []) # checks
+        res = ([],  # columns
+               [],  # references
+               [])  # checks
 
         for column in self.all_columns_defs:
             # figure out the modifiers
@@ -237,9 +230,9 @@ class SQLCompiler(object):
 
         join_string = (',\n{}').format(TAB)
         return (
-            join_string.join(res[0]), # columns
-            join_string.join(res[1]), # references
-            join_string.join(res[2])) # checks
+            join_string.join(res[0]),  # columns
+            join_string.join(res[1]),  # references
+            join_string.join(res[2]))  # checks
 
     @property
     def all_columns(self):
@@ -271,7 +264,7 @@ class SQLCompiler(object):
         """Returns compiled view sql"""
         view_name = self.view_name
         table_name = self.table_name
-        excluded = self.api_definition.get('exclude', '').split(',')
+        excluded = [col.strip() for col in self.api_definition.get('exclude', '').split(',') if col]
         view_columns = [column for column in self.all_columns if
                         (column not in excluded and column not in self.primary_key_names)]
         primary_key = self.primary_key_names[0]
@@ -293,7 +286,7 @@ class SQLCompiler(object):
             if privilege_for == 'none':
                 return ''
             raise InvalidModelDefinition((
-                                             "RLS privileges can be one of ['all', 'self.]. '{}' is provided for table '{}' and is invalid.").format(
+                "RLS privileges can be one of ['all', 'self.]. '{}' is provided for table '{}' and is invalid.").format(
                 privilege_for, self.table_name))
 
         def api_user_permissions(alter_grant_type):

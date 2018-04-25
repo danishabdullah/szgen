@@ -67,7 +67,7 @@ def check_nodes(model_name, model, path='column.name', value_list=None):
 
 
 def get_json_from_dict(dictionary, prettified=False, commented_out_sql=False):
-    dump_params = {'sort_keys': True, 'separators': (',',':')}
+    dump_params = {'sort_keys': True, 'separators': (',', ':')}
     if prettified:
         dump_params = {'indent': 4,
                        'sort_keys': True}
