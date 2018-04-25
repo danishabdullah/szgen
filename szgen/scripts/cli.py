@@ -34,7 +34,7 @@ def parse_yaml(yaml_string):
         check_nodes(model_name, model, 'columns.name')
         # check_nodes(model_name, model, 'columns.type', POSTGRES_TYPES)
         check_nodes(model_name, model, 'rls.read', ['all', 'self'])
-        check_nodes(model_name, model, 'rls.alter', ['all', 'self'])
+        check_nodes(model_name, model, 'rls.alter', ['all', 'self', 'none'])
 
     return model_defs
 

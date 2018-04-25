@@ -60,9 +60,11 @@ table_name:
         table: name_of_table
         column: name_of_column
   rls:
-    # row level security is automatically turned off if both read and alter are set to 'all' this depends on owner_id column please change if you reference the user table differently
+    # row level security is automatically turned off if both read and alter are set to 'all'
+    # row level security is automatically turned off if both read is 'all' and alter is 'none'
+    # rls depends on owner_id column please change if you reference the user table differently
     read: "all" | "self" # assumed 'all' if absent
-    alter: "all" | "self" # assumed 'all' if absent
+    alter: "all" | "self" | "none" # assumed 'all' if absent
   api:
     exclude: comma,separated,names,of,columns # these columns will not be available to the api from this table
   include:

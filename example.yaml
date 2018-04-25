@@ -10,11 +10,11 @@ User:
       type: varchar(256)
       nullable: false
       modifiers: unique
-      check: (length(email) > 7)
+      check: length(email) > 7
     - name: password
       type: varchar(72)
       nullable: false
-      check: (length("password") > 12)
+      check: length("password") > 12
     - name: has_verified_email
       type: boolean
       nullable: false
@@ -34,7 +34,17 @@ User:
   api:
     exclude: password
 
-
+UISetup:
+  columns:
+    - name: name
+      type: varchar(64)
+      primary_key: true
+    - name: details
+      type: jsonb
+      nullable: false
+  rls:
+    read: all
+    alter: none
 
 Profile:
   enums:
@@ -49,11 +59,11 @@ Profile:
     - name: name
       type: varchar(128)
       nullable: false
-      check: check (length(name)>2)
+      check: length(name)>2
     - name: dob
       type: date
       nullable: false
-      check: (dob BETWEEN '1905-01-01'::date  AND CURRENT_DATE - interval '18 year')
+      check: dob BETWEEN '1905-01-01'::date  AND CURRENT_DATE - interval '18 year'
     - name: gender
       type: gender
       nullable: false

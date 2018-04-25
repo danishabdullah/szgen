@@ -69,8 +69,12 @@ class SQLCompiler(object):
         self.data_path = DATA_PATH / self.table_name if name != 'user' else AUTH_LIB_DATA_PATH
         self.api_path = API_PATH / self.table_name
         self.enforce_postgres_types()
-        print("Following columns will be created for table '{}':\n{}{}".format(self.table_name, TAB,
-                                                                               self.all_columns))
+        self.announce_table_columns()
+
+    def announce_table_columns(self):
+        pretty_names = "\n".join(['{}{}'.format(TAB, name) for name in self.all_columns])
+        print("Following columns will be created for table '{}':\n{}".format(
+            self.table_name, pretty_names))
 
     @property
     def all_columns_defs(self):
@@ -250,7 +254,6 @@ class SQLCompiler(object):
             return (', ').join(res)
 
         column_defs, reference_column_defs, check_defs = self.all_compiled_columns
-        print(reference_column_defs)
         rabbitmq_columns = get_rabbitmq_columns(self.rabbitmq_definition.get('columns', ''))
         filename = self.data_path / ('{}.sql').format(self.table_name)
         updated_at_trigger = (
@@ -286,12 +289,21 @@ class SQLCompiler(object):
                 return sql.statements.rls_all
             if privilege_for == 'self':
                 return sql.statements.rls_self
+            if privilege_for == 'none':
+                return ''
             raise InvalidModelDefinition((
                                              "RLS privileges can be one of ['all', 'self.]. '{}' is provided for table '{}' and is invalid.").format(
                 privilege_for, self.table_name))
 
+        def api_user_permissions(alter_grant_type):
+            if alter_grant_type == 'none':
+                return 'select'
+            else:
+                return 'select, insert, update, delete'
+
         filename = PRIVILEGES_PATH / ('{}.sql').format(self.table_name)
-        no_rls = self.rls_alter == self.rls_read == 'all'
+        no_rls = (self.rls_alter == self.rls_read == 'all') or (self.rls_alter == 'none')
+        api_permissions = api_user_permissions(self.rls_alter)
         pkey_col = self.primary_keys[0]
         if pkey_col['type'] in POSTGRES_SERIAL_TYPES:
             pkey_index_name = sql.statements.serial_pkey_index_name.substitute(table_name=self.table_name,
@@ -305,7 +317,8 @@ class SQLCompiler(object):
                                                                     alter_permission=get_rls_statemet(self.rls_alter),
                                                                     table_name=self.table_name)
         string = sql.authorization.privilege_file.substitute(table_name=self.table_name, rls_statement=rls_statement,
-                                                             pkey_index_name=pkey_index_name)
+                                                             pkey_index_name=pkey_index_name,
+                                                             api_permissions=api_permissions)
         return {filename: string}
 
     @property
