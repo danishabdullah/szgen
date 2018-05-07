@@ -1,11 +1,12 @@
 from __future__ import print_function, unicode_literals
 
+import re
 from pathlib import Path
 
 __author__ = 'danishabdullah'
 __all__ = ('POSTGRES_TYPES', 'POSTGRES_TYPES_WITH_PARAMS', 'INDEX_METHODS', 'POSTGREST_ROLES',
            'GRANTABLES', 'MINIMUM_USER_COLUMNS', 'MINIMUM_USER_ROLES', 'POSTGRES_TYPES_WITH_PARAMS_MIDWAY',
-           'DATA_PATH', 'API_PATH', 'PRIVILEGES_PATH', 'AUTH_LIB_USER_DATA_PATH',
+           'DATA_PATH', 'API_PATH', 'PRIVILEGES_PATH', 'AUTH_LIB_USER_DATA_PATH', 'QOUTED_ENUM',
            'AUTH_LIB_API_PATH', 'AUTH_LIB_API_RPC_PATH', 'TAB', 'AUTH_LIB_API_TYPES_PATH',
            'API_RPC_PATH', 'POSTGRES_SERIAL_TYPES', 'AUTH_LIB_DATA_PATH', 'AUTH_LIB_BASE')
 POSTGRES_TYPES = ('bigint', 'bigserial', 'bit', 'bit varying', 'boolean', 'box', 'bytea',
@@ -47,3 +48,4 @@ AUTH_LIB_API_PATH = AUTH_LIB_BASE / 'api'
 AUTH_LIB_API_RPC_PATH = AUTH_LIB_API_PATH / 'rpc'
 AUTH_LIB_API_TYPES_PATH = AUTH_LIB_API_PATH / 'types'
 TAB = '    '
+QOUTED_ENUM = re.compile(r"('(\w+(,?\-?\.?\s?\w+?)+?)',?\s?)")

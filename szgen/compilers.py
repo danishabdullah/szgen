@@ -1,7 +1,8 @@
 from __future__ import print_function, unicode_literals
 
 from szgen.consts import POSTGRES_TYPES, DATA_PATH, API_PATH, API_RPC_PATH, PRIVILEGES_PATH, POSTGRES_SERIAL_TYPES, \
-    AUTH_LIB_API_TYPES_PATH, AUTH_LIB_API_RPC_PATH, AUTH_LIB_DATA_PATH, AUTH_LIB_BASE, TAB, AUTH_LIB_USER_DATA_PATH
+    AUTH_LIB_API_TYPES_PATH, AUTH_LIB_API_RPC_PATH, AUTH_LIB_DATA_PATH, AUTH_LIB_BASE, TAB, AUTH_LIB_USER_DATA_PATH, \
+    QOUTED_ENUM
 from szgen.errors import InvalidModelDefinition
 from szgen.templates import sql
 from szgen.utils import separate_type_info_and_params, get_json_from_dict, remove_extra_white_space
@@ -377,8 +378,17 @@ class SQLCompiler(object):
         for enum in self.enum_definitions:
             enum_name = enum['name']
             filename = ('{}.sql').format(enum_name)
-            enum_options = [x.strip() for x in enum['options'].split(',') if x]
-            enum_display_names = [x.strip() for x in enum.get('display_names', '').split(',') if x]
+            _qouted_ = QOUTED_ENUM.findall(enum['options'])
+            if _qouted_:
+                enum_options = [x[1].strip()+"'" for x in _qouted_ if x]
+            else:
+                enum_options = [x.strip() for x in enum['options'].split(',') if x]
+            _qouted_ = QOUTED_ENUM.findall(enum.get('display_names', ''))
+            if _qouted_:
+                print(_qouted_)
+                enum_display_names = [x[1].strip()+"'" for x in _qouted_ if x]
+            else:
+                enum_display_names = [x.strip() for x in enum.get('display_names', '').split(',') if x]
             compiled_enum_options = compiled_options(enum_options)
             if not enum_display_names:
                 enum_json_dict = {x.title(): x for x in enum_options}
@@ -386,7 +396,9 @@ class SQLCompiler(object):
                 try:
                     assert len(enum_options) == len(enum_display_names)
                 except AssertionError as e:
-                    raise AssertionError("`options` for {} must correspond to `display_names`")
+                    print(enum.get('display_names', ''))
+                    print("These don't match:", enum_options, enum_display_names, sep='\n')
+                    raise AssertionError("`options` for {} must correspond to `display_names`.".format(self.table_name))
                 enum_json_dict = {display_name: value for display_name, value in zip(enum_display_names, enum_options)}
             minified_json = get_json_from_dict(enum_json_dict)
             pretty_json_commented_out = get_json_from_dict(enum_json_dict, prettified=True, commented_out_sql=True)
