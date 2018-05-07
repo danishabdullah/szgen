@@ -32,8 +32,8 @@ def parse_yaml(yaml_string):
     for model_name, model in model_defs.items():
         check_nodes(model_name, model, 'columns.name')
         # check_nodes(model_name, model, 'columns.type', POSTGRES_TYPES)
-        check_nodes(model_name, model, 'rls.read', ['all', 'self'])
-        check_nodes(model_name, model, 'rls.alter', ['all', 'self', 'none'])
+        check_nodes(model_name, model, 'rls.read', ['all', 'self', str])
+        check_nodes(model_name, model, 'rls.alter', ['all', 'self', 'none', str])
 
     return model_defs
 
@@ -47,7 +47,7 @@ def get_model_defs(yaml):
 @click.option('--destination', '-d', help="Destination directory. Default will assume 'output_directory' "
                                           "directory inside the current working directory",
               type=click.Path(exists=True))
-@click.argument('yaml', type=click.File('r'))
+@click.argument('yaml', type=click.File('r', encoding='utf-8'))
 def cli(yaml, destination):
     click.echo(('Creating Models with the following options:\n  --yaml:{}').format(yaml.name))
     yaml_string = yaml.read().lower()
@@ -71,14 +71,16 @@ def cli(yaml, destination):
         sql = SQLCompiler(name, model)
         sql_partials = sql.compiled_sql_partials
         partials_collector.api_schema.append(sql_partials['api.schema'])
-        partials_collector.data_schema.append(sql_partials['data.schema'])
+        ds_partial = sql_partials.get('data.schema', None)
+        if ds_partial:
+            partials_collector.data_schema.append(ds_partial)
         partials_collector.authorization_privileges.append(sql_partials['authorization.privileges'])
         files_collector.update(sql.compiled_files)
 
     compiled_partials = compile_collected_partials(partials_collector)
     files_collector.update(compiled_partials)
     click.echo("Writing {} files".format(len(files_collector.items())))
-    for fpath, content in files_collector.items():
+    for fpath, content in sorted(files_collector.items()):
         full_fpath = ('{}').format(destination) / fpath
         if not path.exists(path.dirname(full_fpath)):
             try:
@@ -88,7 +90,7 @@ def cli(yaml, destination):
                     raise
         try:
             click.echo(('Writing file at {}').format(full_fpath))
-            full_fpath.write_text(content)
+            full_fpath.write_text(content, encoding='utf-8')
         except IOError:
             click.echo(('A failure occured while writing to {}').format(full_fpath))
 

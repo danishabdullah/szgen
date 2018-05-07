@@ -18,9 +18,7 @@ create table "$table_name"(
     $check_defs
 );
 
-create trigger send_change_event
-after insert or update or delete on $table_name
-for each row execute procedure rabbitmq.on_row_change('{"include":[$rabbitmq_columns]}');
-
+$encrypt_password_trigger
+$send_data_to_rabbitmq_trigger
 $updated_at_trigger
 """)

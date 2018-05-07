@@ -23,9 +23,5 @@ grant api to current_user; -- this is a workaround for RDS where the master user
 \ir ../libs/auth/api/all.sql
 
 -- our endpoints
-
--- uisetups
-\ir ui/setups.sql
-
 $api_view_imports
 """)

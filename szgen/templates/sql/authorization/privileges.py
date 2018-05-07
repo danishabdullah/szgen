@@ -18,6 +18,8 @@ select auth.set_auth_endpoints_privileges('api', :'anonymous', enum_range(null::
 -- remember to list all the values of user_role type here
 grant usage on schema api to anonymous, webuser;
 
+-- grant access to webuser to all the relevant sequences
+grant usage on all sequences in schema data to webuser;
 -------------------------------------------------------------------------------
 -- grant appropriate uisetup permissions
 grant select on api.uisetups to webuser;

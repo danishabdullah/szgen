@@ -29,9 +29,16 @@ def enrich_models(model_defs):
 
 def check_values(node, node_name, value_list):
     node_val, val_args = separate_type_info_and_params(node)
-    if not value_list:
-        raise ValueError('Cannot check values without provision of a value_list')
-    if node_val not in value_list:
+    callables = []
+    values = []
+    for idx, x in enumerate(value_list):
+        if callable(x):
+            callables.append(x)
+        else:
+            values.append(x)
+    try:
+        assert any([node_val in values, *[x(node) for x in callables]])
+    except AssertionError as e:
         raise InvalidModelDefinition(
             ("Invalid value '{}' for '{}'. Values for node '{}' should be one of {}").format(node_val, node_name,
                                                                                              node_name, value_list))
@@ -52,7 +59,7 @@ def get_path(model_def, path, prefix='>'):
             el = el.get(key, None)
             full_path = ('.').join([prefix, path])
             if not el:
-                raise InvalidModelDefinition(('{} must exit').format(full_path))
+                raise InvalidModelDefinition('{} must exist'.format(full_path))
             if idx == len(keys) - 1:
                 yield (
                     full_path, el)

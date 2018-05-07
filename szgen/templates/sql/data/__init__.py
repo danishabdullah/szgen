@@ -7,3 +7,4 @@ from .enum import enum
 from .relay import relay
 from .schema import schema
 from .table import table
+from .domain import domain

@@ -7,6 +7,7 @@ __author__ = "danishabdullah"
 __all__ = ('view',)
 
 view = Template("""\echo # Creating $view_name view
+set search_path = api, public;
 create or replace view $view_name as
 select 
     data.relay_id(t.*) as id,

@@ -5,4 +5,3 @@ __author__ = "danishabdullah"
 from .privileges import privileges
 from .privilege_file import privilege_file
 from .roles import roles
-from .schema import schema

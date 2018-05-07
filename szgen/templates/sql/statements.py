@@ -6,7 +6,8 @@ __all__ = ('insert_into', 'column_definition', 'column_check', 'foreign_key', 'u
            'create_extension', 'index_definition', 'where_clause', 'grant_definition', 'table_import',
            'table_type_import', 'relay_import', 'view_import', 'data_table_import', 'data_table_import',
            'api_schema_import', 'api_rpc_import', 'sql_file_import', 'enum_option', 'column_modifiers', 'rls_self',
-           'rls_all', 'rls_statement', 'privileges_file_import', 'serial_pkey_index_name', 'pkey_index_name')
+           'rls_all', 'rls_statement', 'privileges_file_import', 'serial_pkey_index_name', 'pkey_index_name',
+           'encrypt_password_trigger', 'send_data_to_rabbit_mq_trigger')
 
 insert_into = Template("""insert into $table_name ($table_columns)
 values
@@ -15,9 +16,9 @@ column_definition = Template("""$column_name $column_type$column_modifiers""")
 column_modifiers = Template(""" $given_modifiers $primary_key_modifier $null_modifier $default_modifier""")
 column_check = Template("""check ($check_statement)""")
 foreign_key = Template(
-    """$column_name $column_type references $reference_table.$reference_column $column_modifiers""")
+    """$column_name $column_type references "$reference_table"("$reference_column") $column_modifiers""")
 updated_at_trigger = Template("""create trigger updated_at_mdt
-    before update on $table_name
+    before update on "$table_name"
     for each row
     execute procedure moddatetime (updated_at);
 """)
@@ -29,8 +30,7 @@ where_clause = Template("WHERE $condition")
 
 grant_definition = Template("""grant $privilege_name on $table_name to $roles;""")
 
-table_import = Template("""-- $table_name
-\ir $table_name_lowercased/$table_name_lowercased.sql""")
+table_import = Template("""\ir $table_name_lowercased/$table_name_lowercased.sql""")
 
 table_type_import = Template("""\ir $table_name_lowercased/types/all.sql""")
 
@@ -39,7 +39,8 @@ view_import = Template("""-- $table_name
 \ir $table_name_lowercased/${view_name}.sql
 """)
 
-data_table_import = Template("""$table_type_imports
+data_table_import = Template("""-- $table_name_titlecased
+$table_type_imports
 $table_import
 $relay_import
 """)
@@ -70,3 +71,21 @@ with check (
 privileges_file_import = Template("""\ir ${table_name}.sql""")
 serial_pkey_index_name = Template("${table_name}_${primary_key}_seq")
 pkey_index_name = Template("${table_name}_pkey")
+
+encrypt_password_trigger = Template("""create trigger user_encrypt_pass_trigger
+    before insert or update on "user"
+    for each row
+    execute procedure auth.encrypt_pass();
+""")
+
+send_data_to_rabbit_mq_trigger = Template("""-- attach the trigger to send events to rabbitmq
+-- there is a 8000 bytes hard limit on the message payload size (PG NOTIFY) so it's better not to send data that is not used
+-- on_row_change call can take the following forms
+-- on_row_change() - send all columns
+-- on_row_change('{"include":["id"]}'::json) - send only the listed columns
+-- on_row_change('{"exclude":["bigcolumn"]}'::json) - exclude listed columns from the payload
+
+create trigger send_change_event
+    after insert or update or delete on "$table_name"
+    for each row execute procedure rabbitmq.on_row_change('{"include":[$rabbitmq_columns]}');
+""")

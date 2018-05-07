@@ -14,20 +14,18 @@ create extension moddatetime;
 create extension cube;
 create extension earthdistance;
 
+-- Uisetup
+\ir uisetup/types/all.sql
+\ir uisetup/uisetup.sql
+\ir relay/uisetup_id.sql
+
 
 -- import the type specifying the types of users we have (this is an enum).
--- you most certainly will have to redefine this type for your application
-\ir ../libs/auth/data/user/types/user_role.sql
-
--- import the default table definition for the user model used by the auth lib
--- you can choose to define the "user" table yourself if you need additional columns
+\ir ../libs/auth/data/user/types/all.sql
 \ir ../libs/auth/data/user/user.sql
+\ir ../libs/auth/data/relay/user_id.sql
 
 -- import our application models
-
--- ui setup
-\ir ./ui/setup.sql
-\ir ./relay/uisetup_id.sql
 
 $data_table_imports
 """)

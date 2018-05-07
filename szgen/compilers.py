@@ -1,7 +1,7 @@
 from __future__ import print_function, unicode_literals
 
 from szgen.consts import POSTGRES_TYPES, DATA_PATH, API_PATH, API_RPC_PATH, PRIVILEGES_PATH, POSTGRES_SERIAL_TYPES, \
-    AUTH_LIB_API_TYPES_PATH, AUTH_LIB_API_RPC_PATH, AUTH_LIB_DATA_PATH, AUTH_LIB_BASE, TAB
+    AUTH_LIB_API_TYPES_PATH, AUTH_LIB_API_RPC_PATH, AUTH_LIB_DATA_PATH, AUTH_LIB_BASE, TAB, AUTH_LIB_USER_DATA_PATH
 from szgen.errors import InvalidModelDefinition
 from szgen.templates import sql
 from szgen.utils import separate_type_info_and_params, get_json_from_dict, remove_extra_white_space
@@ -15,7 +15,7 @@ def compile_collected_partials(partials_collector):
     data_string = sql.data.schema.substitute(data_table_imports=('\n').join(partials_collector.data_schema))
     api_path = API_PATH / 'schema.sql'
     api_string = sql.api.schema.substitute(api_view_imports=('\n').join(partials_collector.api_schema))
-    authorization_path = PRIVILEGES_PATH / 'schema.sql'
+    authorization_path = PRIVILEGES_PATH / 'privileges.sql'
     authorization_string = sql.authorization.privileges.substitute(
         import_privilege_files=(';\n').join(partials_collector.authorization_privileges))
     return {data_path: data_string,
@@ -38,6 +38,7 @@ class SQLCompiler(object):
         self._model_def = {name: tb_spec}
         self.column_definitions = tb_spec['columns']
         self.enum_definitions = tb_spec.get('enums', [])
+        self.domain_definitions = tb_spec.get('domains', [])
         self.include_created_at = tb_spec.get('include', {}).get('created_at', True)
         self.include_updated_at = tb_spec.get('include', {}).get('updated_at', True)
         if self.include_updated_at:
@@ -58,9 +59,9 @@ class SQLCompiler(object):
         self.rls_read = tb_spec.get('rls', {}).get('read', 'all')
         self.rls_alter = tb_spec.get('rls', {}).get('alter', 'all')
         self.api_definition = tb_spec.get('api', {})
-        self.rabbitmq_definition = tb_spec.get('rabbitmq', {})
+        self.rabbitmq_definition = tb_spec.get('rabbitmq', {}).get('include', '')
         self.index_definitions = tb_spec.get('indices')
-        self.data_path = DATA_PATH / self.table_name if name != 'user' else AUTH_LIB_DATA_PATH
+        self.data_path = DATA_PATH / self.table_name if name != 'user' else AUTH_LIB_USER_DATA_PATH
         self.api_path = API_PATH / self.table_name
         self.enforce_postgres_types()
         self.announce_table_columns()
@@ -101,6 +102,10 @@ class SQLCompiler(object):
         return [enum['name'] for enum in self.enum_definitions]
 
     @property
+    def pg_domain_names(self):
+        return [domain['name'] for domain in self.domain_definitions]
+
+    @property
     def view_name(self):
         """Pluralises the table_name using utterly simple algo and returns as table_name"""
         if not self.table_name:
@@ -134,17 +139,28 @@ class SQLCompiler(object):
         res = list(set(res))
         return res
 
+    def enforce_domain_and_enums_dont_overlap(self):
+        for domain in self.pg_domain_names:
+            try:
+                assert domain not in self.enum_names
+            except AssertionError as e:
+                raise InvalidModelDefinition("Domain and Enum share name '{}' for table '{}'".format(domain,
+                                                                                                     self.table_name))
+
     def enforce_postgres_types(self):
         """Returns known postgres only types referenced in user supplied model"""
         all_types = self.enum_names.copy()
+        all_types.extend(self.pg_domain_names)
         all_types.extend(POSTGRES_TYPES)
         for n in self.types:
             try:
-                if not n in all_types:
+                if n not in all_types:
                     raise AssertionError
             except AssertionError as e:
                 raise InvalidModelDefinition(
-                    ("Column type '{}' not allowed. Columns can only be of one of {}").format(n, all_types))
+                    ("Column type '{}' not allowed for table '{}'. Columns can only be of one of {}").format(n,
+                                                                                                             self.table_name,
+                                                                                                             all_types))
 
     @property
     def primary_keys(self):
@@ -167,7 +183,7 @@ class SQLCompiler(object):
 
         def get_null_modifier(column_def):
             nullable = column_def.get('nullable', True)
-            if nullable:
+            if nullable or nullable is None:
                 modifier = ''
             else:
                 modifier = 'not null'
@@ -175,10 +191,17 @@ class SQLCompiler(object):
 
         def get_default_modifier(column_def):
             default = column_def.get('default', None)
-            if not default:
+            column_type = column_def.get('type')
+            if default is None:
                 modifier = ''
+            elif type(default) != str: # handle booleans/ints/floats gracefully
+                modifier = "default {}".format(str(default).lower())
+            elif default == 'current_timestamp':
+                modifier = "default CURRENT_TIMESTAMP"
+            elif str(default).startswith("settings.") or str(default).startswith("request."):
+                modifier = "default {}".format(default)
             else:
-                modifier = ('default {}').format(default)
+                modifier = "default '{}'::{}".format(default, column_type)
             return modifier
 
         def get_primary_key_modifier(column_def):
@@ -230,8 +253,8 @@ class SQLCompiler(object):
 
         join_string = (',\n{}').format(TAB)
         return (
-            join_string.join(res[0]),  # columns
-            join_string.join(res[1]),  # references
+            join_string.join(res[0]) + "," if (res[0] and (res[1] or res[2])) else join_string.join(res[0]),  # columns
+            join_string.join(res[1]) + "," if (res[1] and res[2]) else join_string.join(res[1]),  # references
             join_string.join(res[2]))  # checks
 
     @property
@@ -243,19 +266,27 @@ class SQLCompiler(object):
     def compiled_table(self):
         """Returns compiled table sql"""
 
-        def get_rabbitmq_columns(column_string):
-            res = [('"{}"').format(column_name) for column_name in column_string.split(',')]
-            return (', ').join(res)
 
         column_defs, reference_column_defs, check_defs = self.all_compiled_columns
-        rabbitmq_columns = get_rabbitmq_columns(self.rabbitmq_definition.get('columns', ''))
+        rabbitmq_columns = self.rabbitmq_definition
         filename = self.data_path / ('{}.sql').format(self.table_name)
         updated_at_trigger = (
             sql.statements.updated_at_trigger.substitute(table_name=self.table_name)) if self.include_updated_at else ''
+        if self.table_name == 'user':
+            encrypt_pass_trigger = sql.statements.encrypt_password_trigger.substitute()
+        else:
+            encrypt_pass_trigger = ''
+        if rabbitmq_columns:
+            rabbitmq_columns = ",".join(['"{}"'.format(col.strip()) for col in rabbitmq_columns.split(',')])
+            rabbitmq_trigger = sql.statements.send_data_to_rabbit_mq_trigger.substitute(table_name=self.table_name,
+                                                                                        rabbitmq_columns=rabbitmq_columns)
+        else:
+            rabbitmq_trigger = ''
         string = sql.data.table.substitute(table_name=self.table_name, column_defs=column_defs,
                                            reference_column_defs=reference_column_defs,
                                            check_defs=check_defs,
-                                           rabbitmq_columns=rabbitmq_columns,
+                                           encrypt_password_trigger=encrypt_pass_trigger,
+                                           send_data_to_rabbitmq_trigger=rabbitmq_trigger,
                                            updated_at_trigger=updated_at_trigger)
         return {filename: string}
 
@@ -285,8 +316,10 @@ class SQLCompiler(object):
                 return sql.statements.rls_self
             if privilege_for == 'none':
                 return ''
+            if privilege_for:
+                return privilege_for
             raise InvalidModelDefinition((
-                "RLS privileges can be one of ['all', 'self.]. '{}' is provided for table '{}' and is invalid.").format(
+                "RLS privileges can be one of ['all', 'self', sql_str ]. '{}' is provided for table '{}' and is invalid.").format(
                 privilege_for, self.table_name))
 
         def api_user_permissions(alter_grant_type):
@@ -340,47 +373,74 @@ class SQLCompiler(object):
 
             return (', ').join(res)
 
-        imports = []
         res = {}
         for enum in self.enum_definitions:
-            filename = ('{}.sql').format(enum['name'])
             enum_name = enum['name']
+            filename = ('{}.sql').format(enum_name)
             enum_options = [x.strip() for x in enum['options'].split(',') if x]
+            enum_display_names = [x.strip() for x in enum.get('display_names', '').split(',') if x]
             compiled_enum_options = compiled_options(enum_options)
-            enum_json_dict = {x.title(): x for x in enum_options}
+            if not enum_display_names:
+                enum_json_dict = {x.title(): x for x in enum_options}
+            else:
+                try:
+                    assert len(enum_options) == len(enum_display_names)
+                except AssertionError as e:
+                    raise AssertionError("`options` for {} must correspond to `display_names`")
+                enum_json_dict = {display_name: value for display_name, value in zip(enum_display_names, enum_options)}
             minified_json = get_json_from_dict(enum_json_dict)
             pretty_json_commented_out = get_json_from_dict(enum_json_dict, prettified=True, commented_out_sql=True)
             enum_file_path = ('types/{}').format(filename)
-            imports.append(sql.statements.sql_file_import.substitute(filename=filename))
             file_name = self.data_path / enum_file_path
             res[file_name] = sql.data.enum.substitute(table_name=self.table_name, enum_options=compiled_enum_options,
                                                       enum_name=enum_name,
                                                       enum_json_min=minified_json,
                                                       enum_json_pretty_commented_out=pretty_json_commented_out)
+        return res
+
+    @property
+    def compiled_domains(self):
+        res = {}
+        for domain in self.domain_definitions:
+            domain_name = domain['name']
+            domain_type = domain['type']
+            domain_condition = domain['check']
+            domain_file_path = self.data_path / "types/{}.sql".format(domain_name)
+            res[domain_file_path] = sql.data.domain.substitute(domain_name=domain_name, domain_type=domain_type,
+                                                               check_sql=domain_condition)
+        return res
+
+    @property
+    def compiled_type_file_imports(self):
+        res = {}
+        imports = []
+        for enum in self.enum_definitions:
+            enum_name = enum['name']
+            imports.append(sql.statements.sql_file_import.substitute(filename=enum_name))
+
+        for domain in self.domain_definitions:
+            domain_name = domain['name']
+            imports.append(sql.statements.sql_file_import.substitute(filename=domain_name))
 
         imports = ('\n').join(imports)
         res[self.data_path / 'types/all.sql'] = sql.data.all_types.substitute(table_name=self.table_name,
                                                                               type_imports=imports)
         return res
 
+
     @property
     def compiled_data_schema_import_partial(self):
         """Returns compiled data schema sql"""
+        if self.table_name in ('user', 'uisetup'):
+            return {}
         table_type_import = sql.statements.table_type_import.substitute(table_name_lowercased=self.table_name)
         relay_import = sql.statements.relay_import.substitute(table_name_lowercased=self.table_name)
-        table_import = sql.statements.table_import.substitute(table_name=self.table_name,
-                                                              table_name_lowercased=self.table_name)
-        res = sql.statements.data_table_import.substitute(table_type_imports=table_type_import,
+        table_import = sql.statements.table_import.substitute(table_name_lowercased=self.table_name)
+        res = sql.statements.data_table_import.substitute(table_name_titlecased=self.table_name.title(),
+                                                          table_type_imports=table_type_import,
                                                           table_import=table_import,
                                                           relay_import=relay_import)
         return {'data.schema': res}
-
-    @property
-    def compiled_authorization_schema(self):
-        """Returns compiled auth schema sql"""
-        fpath = PRIVILEGES_PATH / 'schema.sql'
-        string = sql.authorization.schema.substitute()
-        return {fpath: string}
 
     @property
     def compiled_authorization_roles(self):
@@ -395,7 +455,6 @@ class SQLCompiler(object):
         res = {}
         res.update(self.compiled_privilege_file)
         res.update(self.compiled_authorization_roles)
-        res.update(self.compiled_authorization_schema)
         return res
 
     @property
@@ -458,13 +517,13 @@ class SQLCompiler(object):
         res = {}
         res.update(self.compiled_privilege_file)
         res.update(self.compiled_enums)
-        res.update(self.compiled_authorization_schema)
+        res.update(self.compiled_domains)
+        res.update(self.compiled_type_file_imports)
         res.update(self.compiled_api_rpc)
         res.update(self.compiled_table)
         res.update(self.compiled_relay)
         res.update(self.compiled_view)
         res.update(self.compiled_authorization_roles)
-        res.update(self.compiled_authorization_schema)
         if self.table_name == 'user':
             res.update(self.compiled_auth_lib_api_rpcs)
             res.update(self.compiled_auth_lib_schema)
