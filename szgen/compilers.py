@@ -32,9 +32,10 @@ class SQLCompiler(object):
     for speed.
     """
 
-    def __init__(self, name, tb_spec):
+    def __init__(self, name, tb_spec, relay_on=False):
         if not isinstance(tb_spec, dict):
             raise AssertionError
+        self.relay_on = relay_on
         self.table_name = name
         self._model_def = {name: tb_spec}
         self.column_definitions = tb_spec['columns']
@@ -302,8 +303,15 @@ class SQLCompiler(object):
         primary_key = self.primary_key_names[0]
         filename = self.api_path / ('{}.sql').format(view_name)
         join_string = (',\n{}').format(TAB)
+        if self.relay_on:
+            relay_col = sql.statements.relay_col.substitute()
+            pkey_name = 'row_id'
+        else:
+            relay_col = ''
+            pkey_name = primary_key
         string = sql.api.view.substitute(view_name=view_name, primary_key=primary_key, table_name=table_name,
-                                         column_names=join_string.join(view_columns))
+                                         column_names=join_string.join(view_columns), relay_col=relay_col,
+                                         pkey_name=pkey_name)
         return {filename: string}
 
     @property
@@ -358,6 +366,8 @@ class SQLCompiler(object):
     @property
     def compiled_relay(self):
         """"Returns compiled relay_id sql"""
+        if not self.relay_on:
+            return {}
         primary_key = self.primary_key_names[0]
         res = sql.data.relay.substitute(table_name=self.table_name, primary_key=primary_key)
         fpath = self.data_path / ('../relay/{}_id.sql').format(self.table_name)
@@ -446,7 +456,10 @@ class SQLCompiler(object):
         if self.table_name in ('user', 'uisetup'):
             return {}
         table_type_import = sql.statements.table_type_import.substitute(table_name_lowercased=self.table_name)
-        relay_import = sql.statements.relay_import.substitute(table_name_lowercased=self.table_name)
+        if self.relay_on:
+            relay_import = sql.statements.relay_import.substitute(table_name_lowercased=self.table_name)
+        else:
+            relay_import = ''
         table_import = sql.statements.table_import.substitute(table_name_lowercased=self.table_name)
         res = sql.statements.data_table_import.substitute(table_name_titlecased=self.table_name.title(),
                                                           table_type_imports=table_type_import,
@@ -533,9 +546,10 @@ class SQLCompiler(object):
         res.update(self.compiled_type_file_imports)
         res.update(self.compiled_api_rpc)
         res.update(self.compiled_table)
-        res.update(self.compiled_relay)
         res.update(self.compiled_view)
         res.update(self.compiled_authorization_roles)
+        if self.relay_on:
+            res.update(self.compiled_relay)
         if self.table_name == 'user':
             res.update(self.compiled_auth_lib_api_rpcs)
             res.update(self.compiled_auth_lib_schema)

@@ -10,8 +10,8 @@ view = Template("""\echo # Creating $view_name view
 set search_path = api, public;
 create or replace view $view_name as
 select 
-    data.relay_id(t.*) as id,
-    $primary_key as row_id,
+    $relay_col
+    $primary_key as $pkey_name,
     $column_names
 from data.$table_name t;
 alter view $view_name owner to api; -- it is important to set the correct owner to the RLS policy kicks in

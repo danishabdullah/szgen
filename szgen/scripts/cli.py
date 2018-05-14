@@ -47,8 +47,10 @@ def get_model_defs(yaml):
 @click.option('--destination', '-d', help="Destination directory. Default will assume 'output_directory' "
                                           "directory inside the current working directory",
               type=click.Path(exists=True))
+@click.option('--relay/--no-relay', '-r', help="Make `relay` columns and functions. Turned off by default",
+              default=False)
 @click.argument('yaml', type=click.File('r', encoding='utf-8'))
-def cli(yaml, destination):
+def cli(yaml, destination, relay):
     click.echo(('Creating Models with the following options:\n  --yaml:{}').format(yaml.name))
     yaml_string = yaml.read().lower()
     yaml.close()

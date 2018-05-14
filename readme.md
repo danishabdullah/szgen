@@ -7,10 +7,12 @@ $ szgen --help
 Usage: szgen [OPTIONS] YAML
 
 Options:
-  -d, --destination PATH  Destination directory. Default will assume
-                          'output_directory' directory inside the current
-                          working directory
-  --help                  Show this message and exit.
+  -d, --destination PATH    Destination directory. Default will assume
+                            'output_directory' directory inside the current
+                            working directory
+  -r, --relay / --no-relay  Make `relay` columns and functions. Turned off by
+                            default
+  --help                    Show this message and exit.
 ```
 
 
