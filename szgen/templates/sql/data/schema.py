@@ -17,13 +17,11 @@ create extension earthdistance;
 -- Uisetup
 \ir uisetup/types/all.sql
 \ir uisetup/uisetup.sql
-\ir relay/uisetup_id.sql
 
 
 -- import the type specifying the types of users we have (this is an enum).
 \ir ../libs/auth/data/user/types/all.sql
 \ir ../libs/auth/data/user/user.sql
-\ir ../libs/auth/data/relay/user_id.sql
 
 -- import our application models
 

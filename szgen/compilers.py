@@ -11,9 +11,16 @@ __author__ = 'danishabdullah'
 __all__ = ('SQLCompiler',)
 
 
-def compile_collected_partials(partials_collector):
+def compile_collected_partials(partials_collector, relay_on=False):
     data_path = DATA_PATH / 'schema.sql'
-    data_string = sql.data.schema.substitute(data_table_imports=('\n').join(partials_collector.data_schema))
+    if relay_on:
+        relay_user_import = sql.statements.relay_user_import.substitute()
+        relay_uisetups_import = sql.statements.relay_uisetups_import.substitute()
+    else:
+        relay_uisetups_import = relay_user_import = ''
+    data_string = sql.data.schema.substitute(data_table_imports=('\n').join(partials_collector.data_schema),
+                                             relay_user_import=relay_user_import,
+                                             relay_uisetups_import=relay_uisetups_import)
     api_path = API_PATH / 'schema.sql'
     api_string = sql.api.schema.substitute(api_view_imports=('\n').join(partials_collector.api_schema))
     authorization_path = PRIVILEGES_PATH / 'privileges.sql'

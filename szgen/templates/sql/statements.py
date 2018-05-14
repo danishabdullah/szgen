@@ -7,7 +7,8 @@ __all__ = ('insert_into', 'column_definition', 'column_check', 'foreign_key', 'u
            'table_type_import', 'relay_import', 'view_import', 'data_table_import', 'data_table_import',
            'api_schema_import', 'api_rpc_import', 'sql_file_import', 'enum_option', 'column_modifiers', 'rls_self',
            'rls_all', 'rls_statement', 'privileges_file_import', 'serial_pkey_index_name', 'pkey_index_name',
-           'encrypt_password_trigger', 'send_data_to_rabbit_mq_trigger', 'relay_col')
+           'encrypt_password_trigger', 'send_data_to_rabbit_mq_trigger', 'relay_col', 'relay_uisetups_import',
+           'relay_user_import')
 
 insert_into = Template("""insert into $table_name ($table_columns)
 values
@@ -53,6 +54,10 @@ api_rpc_import = Template("""\ir rpc/${view_name}.sql""")
 sql_file_import = Template("""\ir $filename.sql""")
 
 relay_col = Template("""data.relay_id(t.*) as id,""")
+
+relay_uisetups_import = Template("""\ir relay/uisetup_id.sql""")
+
+relay_user_import = Template("""\ir ../libs/auth/data/relay/user_id.sql""")
 
 enum_option = Template("""'$enum_option'""")
 

@@ -70,7 +70,7 @@ def cli(yaml, destination, relay):
     files_collector = {}
     for name, model in model_defs.items():
         click.echo('Compiling model "{}"'.format(name))
-        sql = SQLCompiler(name, model)
+        sql = SQLCompiler(name, model, relay_on=relay)
         sql_partials = sql.compiled_sql_partials
         partials_collector.api_schema.append(sql_partials['api.schema'])
         ds_partial = sql_partials.get('data.schema', None)
@@ -79,7 +79,7 @@ def cli(yaml, destination, relay):
         partials_collector.authorization_privileges.append(sql_partials['authorization.privileges'])
         files_collector.update(sql.compiled_files)
 
-    compiled_partials = compile_collected_partials(partials_collector)
+    compiled_partials = compile_collected_partials(partials_collector, relay_on=relay)
     files_collector.update(compiled_partials)
     click.echo("Writing {} files".format(len(files_collector.items())))
     for fpath, content in sorted(files_collector.items()):
