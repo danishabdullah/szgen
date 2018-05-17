@@ -10,6 +10,8 @@ schema = Template("""drop schema if exists data cascade;
 create schema data;
 set search_path = data, public;
 
+select settings.set('auth.data-schema', current_schema);
+
 create extension moddatetime;
 create extension cube;
 create extension earthdistance;
