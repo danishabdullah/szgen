@@ -6,7 +6,7 @@ __author__ = "danishabdullah"
 
 __all__ = ('signup',)
 
-signup = Template("""\e # Creating signup(email, password) function. Modify this if you want to use a different signup.
+signup = Template("""\echo # Creating signup(email, password) function. Modify this if you want to use a different signup.
 create or replace function signup(email text, password text) returns session as $$$$
 declare
     usr record;

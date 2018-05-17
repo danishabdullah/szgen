@@ -21,7 +21,7 @@ Options:
 ---------------------------------------------------------------------------------
 
 table_name:
-  enums?: # enums used in this table
+  enums?: # enums used in this table, an enum definited in one table can be used anywhere else
     - name: string
       options: comma,separated,values
       display_names?: comma,separated,values,in,same,order,as,options

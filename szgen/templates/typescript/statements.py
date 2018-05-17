@@ -4,7 +4,6 @@ from string import Template
 
 __author__ = "danishabdullah"
 
-
 __all__ = ('ui_default_definition',)
 
 ui_default_definition = Template("""export let $enum_name_capitalized: UIOption = {

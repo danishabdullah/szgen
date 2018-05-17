@@ -7,7 +7,7 @@ __author__ = 'danishabdullah'
 __all__ = ('POSTGRES_TYPES', 'POSTGRES_TYPES_WITH_PARAMS', 'INDEX_METHODS', 'POSTGREST_ROLES',
            'GRANTABLES', 'MINIMUM_USER_COLUMNS', 'MINIMUM_USER_ROLES', 'POSTGRES_TYPES_WITH_PARAMS_MIDWAY',
            'DATA_PATH', 'API_PATH', 'PRIVILEGES_PATH', 'AUTH_LIB_USER_DATA_PATH', 'QOUTED_ENUM',
-           'AUTH_LIB_API_PATH', 'AUTH_LIB_API_RPC_PATH', 'TAB', 'AUTH_LIB_API_TYPES_PATH',
+           'AUTH_LIB_API_PATH', 'AUTH_LIB_API_RPC_PATH', 'TAB', 'AUTH_LIB_API_TYPES_PATH', 'AUTH_LIB_API_PATH',
            'API_RPC_PATH', 'POSTGRES_SERIAL_TYPES', 'AUTH_LIB_DATA_PATH', 'AUTH_LIB_BASE')
 POSTGRES_TYPES = ('bigint', 'bigserial', 'bit', 'bit varying', 'boolean', 'box', 'bytea',
                   'character', 'character varying', 'cidr', 'circle', 'date', 'double precision',

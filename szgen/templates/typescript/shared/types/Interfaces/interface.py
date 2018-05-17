@@ -4,7 +4,6 @@ from string import Template
 
 __author__ = "danishabdullah"
 
-
 __all__ = ('table_interface',)
 
 table_interface = Template("""export interface ${table_name_snakecased} {

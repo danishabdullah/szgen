@@ -4,7 +4,6 @@ from string import Template
 
 __author__ = "danishabdullah"
 
-
 __all__ = ('ui_interfaces',)
 
 ui_interfaces = Template("""interface Option {

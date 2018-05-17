@@ -7,7 +7,7 @@ import click
 import yaml
 
 from szgen.compilers import SQLCompiler, compile_collected_partials
-from szgen.errors import DirectoryCreationException, FileNotFound
+from szgen.errors import DirectoryCreationException, FileNotFound, InvalidModelDefinition
 from szgen.utils import check_nodes, PartialsCollector
 
 __author__ = 'danishabdullah'
@@ -43,6 +43,15 @@ def get_model_defs(yaml):
     return model_defs
 
 
+def get_all_user_defined_types(model_defs):
+    enums = []
+    domains = []
+    for name, defi in model_defs.items():
+        enums.extend([item['name'] for item in defi.get('enums', [])])
+        domains.extend([item['name'] for item in defi.get('domains', [])])
+    return enums, domains
+
+
 @click.command()
 @click.option('--destination', '-d', help="Destination directory. Default will assume 'output_directory' "
                                           "directory inside the current working directory",
@@ -66,11 +75,19 @@ def cli(yaml, destination, relay):
         click.echo('The yaml file does not exist. Exiting!')
         return
 
+    enums, domains = get_all_user_defined_types(model_defs)
+    common = set(enums).intersection(set(domains))
+    try:
+        assert len(common) == 0
+    except AssertionError as e:
+        raise InvalidModelDefinition("Enums and Domains cannot share names. See `{}`".format(common))
     partials_collector = PartialsCollector([], [], [])
     files_collector = {}
     for name, model in model_defs.items():
         click.echo('Compiling model "{}"'.format(name))
-        sql = SQLCompiler(name, model, relay_on=relay)
+        other_enums = [n for n in enums if n not in [item['name'] for item in model.get('enums', [])]]
+        other_domains = [n for n in domains if n not in [item['name'] for item in model.get('domains', [])]]
+        sql = SQLCompiler(name, model, other_enum_names=other_enums, other_domain_names=other_domains, relay_on=relay)
         sql_partials = sql.compiled_sql_partials
         partials_collector.api_schema.append(sql_partials['api.schema'])
         ds_partial = sql_partials.get('data.schema', None)

@@ -1,8 +1,8 @@
 from __future__ import print_function, unicode_literals
 
 from szgen.consts import POSTGRES_TYPES, DATA_PATH, API_PATH, API_RPC_PATH, PRIVILEGES_PATH, POSTGRES_SERIAL_TYPES, \
-    AUTH_LIB_API_TYPES_PATH, AUTH_LIB_API_RPC_PATH, AUTH_LIB_DATA_PATH, AUTH_LIB_BASE, TAB, AUTH_LIB_USER_DATA_PATH, \
-    QOUTED_ENUM
+    AUTH_LIB_API_TYPES_PATH, AUTH_LIB_API_RPC_PATH, AUTH_LIB_BASE, TAB, AUTH_LIB_USER_DATA_PATH, \
+    QOUTED_ENUM, AUTH_LIB_API_PATH
 from szgen.errors import InvalidModelDefinition
 from szgen.templates import sql
 from szgen.utils import separate_type_info_and_params, get_json_from_dict, remove_extra_white_space
@@ -25,7 +25,7 @@ def compile_collected_partials(partials_collector, relay_on=False):
     api_string = sql.api.schema.substitute(api_view_imports=('\n').join(partials_collector.api_schema))
     authorization_path = PRIVILEGES_PATH / 'privileges.sql'
     authorization_string = sql.authorization.privileges.substitute(
-        import_privilege_files=(';\n').join(partials_collector.authorization_privileges))
+        import_privilege_files=('\n').join(partials_collector.authorization_privileges))
     return {data_path: data_string,
             api_path: api_string,
             authorization_path: authorization_string}
@@ -39,9 +39,11 @@ class SQLCompiler(object):
     for speed.
     """
 
-    def __init__(self, name, tb_spec, relay_on=False):
+    def __init__(self, name, tb_spec, other_enum_names=(), other_domain_names=(), relay_on=False):
         if not isinstance(tb_spec, dict):
             raise AssertionError
+        self.other_enum_names = other_enum_names
+        self.other_domain_names = other_domain_names
         self.relay_on = relay_on
         self.table_name = name
         self._model_def = {name: tb_spec}
@@ -107,11 +109,23 @@ class SQLCompiler(object):
         return res
 
     @property
+    def all_enum_names(self):
+        res = self.enum_names.copy()
+        res.extend(self.other_enum_names)
+        return res
+
+    @property
     def enum_names(self):
         return [enum['name'] for enum in self.enum_definitions]
 
     @property
-    def pg_domain_names(self):
+    def all_domain_names(self):
+        res = self.domain_names.copy()
+        res.extend(self.other_domain_names)
+        return res
+
+    @property
+    def domain_names(self):
         return [domain['name'] for domain in self.domain_definitions]
 
     @property
@@ -149,17 +163,17 @@ class SQLCompiler(object):
         return res
 
     def enforce_domain_and_enums_dont_overlap(self):
-        for domain in self.pg_domain_names:
+        for domain in self.domain_names:
             try:
-                assert domain not in self.enum_names
+                assert domain not in self.allenum_names
             except AssertionError as e:
                 raise InvalidModelDefinition("Domain and Enum share name '{}' for table '{}'".format(domain,
                                                                                                      self.table_name))
 
     def enforce_postgres_types(self):
         """Returns known postgres only types referenced in user supplied model"""
-        all_types = self.enum_names.copy()
-        all_types.extend(self.pg_domain_names)
+        all_types = self.all_enum_names.copy()
+        all_types.extend(self.all_domain_names)
         all_types.extend(POSTGRES_TYPES)
         for n in self.types:
             try:
@@ -203,7 +217,7 @@ class SQLCompiler(object):
             column_type = column_def.get('type')
             if default is None:
                 modifier = ''
-            elif type(default) != str: # handle booleans/ints/floats gracefully
+            elif type(default) != str:  # handle booleans/ints/floats gracefully
                 modifier = "default {}".format(str(default).lower())
             elif default == 'current_timestamp':
                 modifier = "default CURRENT_TIMESTAMP"
@@ -275,7 +289,6 @@ class SQLCompiler(object):
     def compiled_table(self):
         """Returns compiled table sql"""
 
-
         column_defs, reference_column_defs, check_defs = self.all_compiled_columns
         rabbitmq_columns = self.rabbitmq_definition
         filename = self.data_path / ('{}.sql').format(self.table_name)
@@ -300,8 +313,26 @@ class SQLCompiler(object):
         return {filename: string}
 
     @property
+    def pkey_col_name(self):
+        if self.relay_on:
+            pkey_name = 'row_id'
+        else:
+            pkey_name = self.primary_key_names[0]
+        return pkey_name
+
+    @property
+    def relay_col_name(self):
+        if self.relay_on:
+            relay_col = sql.statements.relay_col.substitute()
+        else:
+            relay_col = ''
+        return relay_col
+
+    @property
     def compiled_view(self):
         """Returns compiled view sql"""
+        if self.table_name == 'user':
+            return {}
         view_name = self.view_name
         table_name = self.table_name
         excluded = [col.strip() for col in self.api_definition.get('exclude', '').split(',') if col]
@@ -310,15 +341,9 @@ class SQLCompiler(object):
         primary_key = self.primary_key_names[0]
         filename = self.api_path / ('{}.sql').format(view_name)
         join_string = (',\n{}').format(TAB)
-        if self.relay_on:
-            relay_col = sql.statements.relay_col.substitute()
-            pkey_name = 'row_id'
-        else:
-            relay_col = ''
-            pkey_name = primary_key
         string = sql.api.view.substitute(view_name=view_name, primary_key=primary_key, table_name=table_name,
-                                         column_names=join_string.join(view_columns), relay_col=relay_col,
-                                         pkey_name=pkey_name)
+                                         column_names=join_string.join(view_columns), relay_col=self.relay_col_name,
+                                         pkey_name=self.pkey_col_name)
         return {filename: string}
 
     @property
@@ -345,6 +370,8 @@ class SQLCompiler(object):
                 return 'select, insert, update, delete'
 
         filename = PRIVILEGES_PATH / ('{}.sql').format(self.table_name)
+        if self.table_name == 'user':
+            return {filename: "\echo Please use rpcs in auth lib to manage permissions for user table!"}
         no_rls = (self.rls_alter == self.rls_read == 'all') or (self.rls_alter == 'none')
         api_permissions = api_user_permissions(self.rls_alter)
         pkey_col = self.primary_keys[0]
@@ -355,13 +382,19 @@ class SQLCompiler(object):
             pkey_index_name = sql.statements.pkey_index_name.substitute(table_name=self.table_name)
         if no_rls:
             rls_statement = ''
+            anonymous_user_permissions = "grant {api_permissions} on api.{view_name} to anonymous;".format(
+                view_name=self.view_name,
+                api_permissions=api_permissions)
         else:
             rls_statement = sql.statements.rls_statement.substitute(read_permission=get_rls_statemet(self.rls_read),
                                                                     alter_permission=get_rls_statemet(self.rls_alter),
                                                                     table_name=self.table_name)
+            anonymous_user_permissions = ''
+
         string = sql.authorization.privilege_file.substitute(table_name=self.table_name, rls_statement=rls_statement,
-                                                             pkey_index_name=pkey_index_name,
-                                                             api_permissions=api_permissions)
+                                                             pkey_index_name=pkey_index_name, view_name=self.view_name,
+                                                             api_permissions=api_permissions,
+                                                             anonymous_user_permissions=anonymous_user_permissions)
         return {filename: string}
 
     @property
@@ -397,13 +430,13 @@ class SQLCompiler(object):
             filename = ('{}.sql').format(enum_name)
             _qouted_ = QOUTED_ENUM.findall(enum['options'])
             if _qouted_:
-                enum_options = [x[1].strip()+"'" for x in _qouted_ if x]
+                enum_options = [x[1].strip() for x in _qouted_ if x]
             else:
                 enum_options = [x.strip() for x in enum['options'].split(',') if x]
             _qouted_ = QOUTED_ENUM.findall(enum.get('display_names', ''))
             if _qouted_:
                 print(_qouted_)
-                enum_display_names = [x[1].strip()+"'" for x in _qouted_ if x]
+                enum_display_names = [x[1].strip() for x in _qouted_ if x]
             else:
                 enum_display_names = [x.strip() for x in enum.get('display_names', '').split(',') if x]
             compiled_enum_options = compiled_options(enum_options)
@@ -456,7 +489,6 @@ class SQLCompiler(object):
                                                                               type_imports=imports)
         return res
 
-
     @property
     def compiled_data_schema_import_partial(self):
         """Returns compiled data schema sql"""
@@ -492,13 +524,17 @@ class SQLCompiler(object):
     @property
     def compiled_api_rpc(self):
         """Returns compiled api rpc search sql"""
+        if self.table_name == 'user':
+            return {}
         filename = API_RPC_PATH / ('{}.sql').format(self.view_name)
-        string = sql.api.search.substitute(view_name=self.view_name, primary_key=self.primary_key_names[0])
+        string = sql.api.search.substitute(view_name=self.view_name, primary_key=self.pkey_col_name)
         return {filename: string}
 
     @property
     def compiled_api_schema_partial(self):
         """Returns compiled api schema sql"""
+        if self.table_name == 'user':
+            return {'api.schema': ''}
         view_import = sql.statements.view_import.substitute(table_name=self.table_name,
                                                             table_name_lowercased=self.table_name,
                                                             view_name=self.view_name)
@@ -536,12 +572,15 @@ class SQLCompiler(object):
         me_string = sql.libs.auth.api.rpc.me.substitute()
         refresh_token_path = AUTH_LIB_API_RPC_PATH / 'refresh_token.sql'
         refresh_token_string = sql.libs.auth.api.rpc.refresh_token.substitute()
-        signup_path = AUTH_LIB_API_RPC_PATH / 'signup_token.sql'
+        signup_path = AUTH_LIB_API_RPC_PATH / 'signup.sql'
         signup_string = sql.libs.auth.api.rpc.signup.substitute()
+        all_path = AUTH_LIB_API_PATH / 'all.sql'
+        all = sql.libs.auth.api.all.all.substitute()
         return {login_path: login_string,
                 me_path: me_string,
                 refresh_token_path: refresh_token_string,
-                signup_path: signup_string}
+                signup_path: signup_string,
+                all_path: all}
 
     @property
     def compiled_files(self):
